@@ -1,2 +1,2 @@
-subha
+Restricted Boltzmann Machine
 =====
