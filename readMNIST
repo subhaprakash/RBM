@@ -1,0 +1,33 @@
+% This program convert MNIST Datasets into matlab format.
+% read digits= no of digits
+% offset=no of digits to be skipped
+
+readdigits=60000;
+imgs=[];
+
+% Read digits
+fid = fopen('train-images-idx3-ubyte', 'r','b');
+offset= fread(fid, 4, 'int32');
+imgs = fread(fid,inf, 'uchar'); 
+imgs = reshape(imgs,28*28,readdigits);
+timgs= transpose(imgs);
+fclose(fid);
+
+%convert greyscale image into binary format
+ddata = timgs/255;
+totnum= size(ddata,1);
+fprintf(1, 'Size of the training dataset= %5d \n', totnum);
+rng(0); 
+randomorder=randperm(totnum);
+
+%Create minibatches
+batchsize = 100;
+numbatches = totnum/batchsize;
+numdims  =  size(ddata,2);
+batchdatas = zeros(batchsize,numdims,numbatches);
+for b=1:numbatches
+batchdatas(:,:,b)= ddata(randomorder(1+(b-1)*batchsize:b*batchsize),:);
+end;
+
+%%% Reset random seeds 
+rng('shuffle');
