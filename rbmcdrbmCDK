@@ -1,0 +1,135 @@
+Hinton
+
+% Restricted Boltzmann Machine trained using Contrastive divergence k
+
+epsilonw   = 0.1;   % Learning rate for weights 
+epsilonvb  = 0.1;   % Learning rate for biases of visible units 
+epsilonhb  = 0.1;   % Learning rate for biases of hidden units 
+weightcost = 0.0002;   
+initialmomentum  = 0.5;
+finalmomentum    = 0.9;
+[numcases, numdims, numbatches]=size(batchdatas); %batchdata is 3 dimensional and splitted as integers and assigned to  each variables
+epoch=1;
+k=1;
+
+% Initializing symmetric weights and biases 
+vishid     = 0.1*randn(numdims,numhid);
+hidbiases  = zeros(1,numhid);
+visbiases  = zeros(1,numdims);
+poshidprobs = zeros(numcases,numhid);
+neghidprobs = zeros(numcases,numhid);
+posprods    = zeros(numdims,numhid);
+negprods    = zeros(numdims,numhid);
+vishidinc  = zeros(numdims,numhid);
+hidbiasinc = zeros(1,numhid);
+visbiasinc = zeros(1,numdims);
+batchposhidprobs=zeros(numcases,numhid,numbatches);
+fprintf(1,'Training starts with RBM: %d-%d \n',numdims,numhid);
+
+% Training started 
+for epoch = epoch:maxepoch,%no of training steps is initialized
+tic;
+fprintf(1,'epoch %d\r',epoch); %prints the no of training phase
+errsum=0; %error is intialized to 0
+
+for batch = 1:numbatches,%dataset is splitted into minibatches 
+fprintf(1,'epoch %d batch %d\r',epoch,batch); %displayed  no of training set and the no of batch
+
+%Start positive phase
+data = batchdatas(:,:,batch); %data is taken from batches one by one
+% Find Data distribution
+poshidprobs= 1./(1 + exp((-data*vishid) - repmat(hidbiases,numcases,1)));
+posprods  = data' * poshidprobs;% produces product vi*hj
+poshidact = sum(poshidprobs);% sum everything in columnwise(average all the probabilities in the minibatch (hj in allover the minibatch) )
+posvisact = sum(data);
+
+% Start negative phase
+for cd_k=1:k, 
+poshidstates = poshidprobs > rand(numcases,numhid);
+negdata= 1./(1 + exp((-poshidstates*vishid') - repmat(visbiases,numcases,1)));
+%negstates= negdata>rand(numcases,numdims);
+neghidprobs = 1./(1 + exp((-negdata*vishid ) - repmat(hidbiases,numcases,1)));
+poshidprobs=neghidprobs;
+end
+
+% Find Model distribution
+negprods  = negdata'*neghidprobs;%(vi*hj)
+neghidact = sum(neghidprobs);%sum everything in columnwise(average all the probabilities in the minibatch (hj in allover the minibatch))
+negvisact = sum(negdata);%(average all the data vectors in the minibatch)
+
+%Findout error
+err= sum(sum((data-negdata).^2 )); % |x(original)-x(reconstructed)|2 
+errsum = err + errsum;
+
+fprintf(1, 'epoch %d  batch %d error %6.1f\r', epoch,batch, errsum); 
+if epoch>5,
+momentum=finalmomentum;
+else
+momentum=initialmomentum;
+end
+
+vishidinc = momentum*vishidinc + ...
+                 epsilonw*((posprods-negprods)/numcases - weightcost*vishid);
+visbiasinc = momentum*visbiasinc + (epsilonvb/numcases)*(posvisact-negvisact);
+hidbiasinc = momentum*hidbiasinc + (epsilonhb/numcases)*(poshidact-neghidact);
+     
+% Update weights and biases    
+vishid = vishid + vishidinc;
+visbiases = visbiases + visbiasinc;
+hidbiases = hidbiases + hidbiasinc;
+
+% Display the input and output image
+fprintf(1,'Displaying in figure 1: Top row - real data, Bottom row -- reconstructions \n');
+output=[];
+for ii=1:15
+output = [output data(ii,:)' negdata(ii,:)'];
+end
+visualdis(output);
+end
+x(epoch)=errsum;
+t(epoch)=toc;
+fprintf(1,'epoch %d  elapsedtime %2.3f \n',epoch,t(epoch));
+end;
+
+%Display  no of epochs vs time
+figure;
+xlabel('No of epochs');
+subplot(2,2,1);plot(t);
+ylabel('time taken');
+title('Performance time measure');
+
+%Display no of epochs vs error 
+subplot(2,2,3);plot(x);
+xlabel('No of epochs');
+ylabel('error');
+title('PerformanceError measure');
+
+%Monitor weights
+%subplot(2,2,3);
+figure ;
+subplot(2,2,1);
+hist(vishid);
+title('Weights');
+
+%monitor visible  biases
+subplot(2,2,2);
+hist(visbiases);
+title('visible bias');
+
+% Monitor hidden biases
+subplot(2,2,3);
+hist(hidbiases);
+title('Hidden biases');
+
+%visualize Weights
+h=figure;
+%set(h,'Visible','off');
+title('Visualizing weights');
+imagesize=[28 28];
+
+for i=1:500,
+    %subplot(23,23,i);
+    x=vishid(:,i);
+    imagesc(reshape(x,imagesize));
+    colormap gray;
+ end
