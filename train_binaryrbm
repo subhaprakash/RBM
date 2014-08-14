@@ -1,0 +1,8 @@
+clc; clear all;
+close all;
+maxepoch=50; 
+numhid=500;  
+fprintf(1,'Converting Raw files into Matlab format \n');
+%tic;
+readMNIST; 
+rbmcdrbmCDk; %training RBM 
