@@ -1,0 +1,176 @@
+%binary visible
+%binary hidden
+
+% parallel tempering
+
+epsilonw   = 0.001;   % Learning rate for weights 
+epsilonvb  = 0.001;   % Learning rate for biases of visible units 
+epsilonhb  = 0.001; 
+%epsilonsigma  = 0.00000001;% Learning rate for biases of hidden units 
+weightcost = 0.00002;  
+epsilonsigma  = 0.000000001;
+initialmomentum  = 0.5;
+finalmomentum    = 0.9;
+[numcases, numdims, numbatches]=size(batchdatas); %batchdata is 3 dimensional and splitted as integers and assigned to  each variables
+epoch=1;
+k=1;
+
+% Initializing symmetric weights and biases 
+vishid     = 0.1*randn(numdims,numhid);
+hidbiases  = zeros(1,numhid);
+visbiases  = zeros(1,numdims);
+sigmas  = ones(1,numdims);
+poshidprobs = zeros(numcases,numhid);
+neghidprobs = zeros(numcases,numhid);
+posprods    = zeros(numdims,numhid);
+negprods    = zeros(numdims,numhid);
+vishidinc  = zeros(numdims,numhid);
+hidbiasinc = zeros(1,numhid);
+visbiasinc = zeros(1,numdims);
+sigmainc=zeros(1,numdims);
+possigmaact = zeros(1,numhid);
+negsigmaact = zeros(1,numhid);
+batchposhidprobs=zeros(numcases,numhid,numbatches);
+fprintf(1,'Training starts with RBM: %d-%d \n',numdims,numhid);
+
+% Training started 
+for epoch = epoch:maxepoch,%no of training steps is initialized
+tic;
+fprintf(1,'epoch %d\r',epoch); %prints the no of training phase
+errsum=0; %error is intialized to 0
+
+for batch = 1:numbatches,%dataset is splitted into minibatches 
+fprintf(1,'epoch %d batch %d\r',epoch,batch); %displayed  no of training set and the no of batch
+
+%Start positive phase
+data = batchdatas(:,:,batch); %data is taken from batches one by oneo
+data = zscore(data,1); % provide Gaussian distributed data
+
+% Find Data distribution
+poshidprobspart2 = vishid' *(bsxfun(@rdivide,data,sigmas))';
+poshidprobs= 1./(1 + exp((-poshidprobspart2)'- repmat(hidbiases,numcases,1)));
+posprods  = data' * poshidprobs;% produces product vi*hj
+poshidact = sum(poshidprobs);% sum everyting in columnwise(average all the probabilities in the minibatch (hj in allover the minibatch) )
+posvisact = sum(data);
+possigmaact1=(data-repmat(visbiases,numcases,1)).^2-repmat((sigmas*(posprods*vishid')),numcases,1); 
+possigmaact=sum(possigmaact1);
+%possigmapart1=bsxfun(@minus,data,visbiases);
+%possigmapart2= sum(vishid*posprods');
+%possigmas  = bsxfun(@minus,possigmapart1.^2,possigmapart2);
+%possigmaact= sum(possigmas);
+
+% Start negative phase
+% Find Model distribution
+%for cd_k=1:k, 
+poshidstates= poshidprobs > rand(numcases,numhid);
+negdatapart=poshidstates*vishid'; %bsxfun(@rdivide,,sigmas));
+negdatapart2= negdatapart*(sigmas)';
+negdata= bsxfun(@plus,negdatapart2,repmat(visbiases,numcases,1));
+%negdata= normrnd(negdatapart2,sigmas);
+neghidprobs2= vishid' *(bsxfun(@rdivide,negdata,sigmas))';
+neghidprobs= 1./(1 + exp((-neghidprobs2)'- repmat(hidbiases,numcases,1)));
+%poshidprobs= neghidprobs;
+%end
+negprods  = negdata'*neghidprobs;%(vi*hj)
+neghidact = sum(neghidprobs);%sum everything in columnwise(average all the probabilities in the minibatch (hj in allover the minibatch))
+negvisact = sum(negdata);%(average all the data vectors in the minibatch)
+negsigmaact1=(negdata-repmat(visbiases,numcases,1)).^2-repmat((sigmas*(negprods*vishid')),numcases,1); 
+negsigmaact=sum(negsigmaact1);
+%negsigmapart1=bsxfun(@minus,negdata,visbiases);
+%negsigmapart2=sum(vishid*negprods');
+%negsigmas=bsxfun(@minus,(negsigmapart1.^2) , (negsigmapart2));
+%negsigmaact=sum(negsigmas);
+
+%Findout error
+err= sum(sum((data-negdata).^2 )); % |x(original)-x(reconstructed)|2 
+errsum = err + errsum;
+x(epoch)=errsum;
+fprintf(1, 'epoch %d  batch %d error %6.1f\r', epoch,batch, errsum); 
+if epoch>5,
+momentum=finalmomentum;
+else
+momentum=initialmomentum;
+end
+
+vishidincpart1= epsilonw * (((posprods-negprods)/numcases) - (weightcost*vishid));
+vishidincpart2=bsxfun(@rdivide,vishidincpart1,(sigmas)');
+vishidinc = (momentum*vishidinc) + vishidincpart2;
+visbiasinc1 = epsilonvb *((posvisact-negvisact)/numcases);
+visbiasinc2 = bsxfun(@rdivide,visbiasinc1,(sigmas.^2));
+visbiasinc = (momentum*visbiasinc) + visbiasinc2;
+hidbiasinc = momentum*hidbiasinc + (epsilonhb/numcases)*(poshidact-neghidact);
+sigmaincpart1=epsilonsigma*((possigmaact-negsigmaact)/numcases);
+sigmaincpart2= bsxfun(@rdivide,sigmaincpart1,sigmas.^3);
+sigmainc   =(momentum*sigmainc)+sigmaincpart2;
+
+
+vishid = vishid + vishidinc;
+visbiases = visbiases + visbiasinc;
+hidbiases = hidbiases + hidbiasinc;
+sigmas    = sigmas+sigmainc;
+
+
+% Display the input and output image
+fprintf(1,'Displaying in figure 1: Top row - real data, Bottom row -- reconstructions \n');
+output=[];
+for ii=1:15
+output = [output data(ii,:)' negdata(ii,:)'];
+end
+visualdis(output);
+end
+t(epoch)=toc;
+fprintf(1,'epoch %d  elapsedtime %2.3f \n',epoch,t(epoch));
+end;
+
+%Display  no of epochs vs time
+figure;
+xlabel('No of epochs');
+subplot(2,2,1);plot(t);
+ylabel('time taken');
+title('Performance time measure');
+
+%Display no of epochs vs error 
+subplot(2,2,3);plot(x);
+xlabel('No of epochs');
+ylabel('error');
+title('PerformanceError measure');
+
+%Monitor weights
+%subplot(2,2,3);
+figure ;
+subplot(2,2,1);
+hist(vishid);
+title('Weights');
+
+%monitor visible  biases
+subplot(2,2,2);
+hist(visbiases);
+title('visible bias');
+
+% Monitor hidden biases
+subplot(2,2,3);
+hist(hidbiases);
+title('Hidden biases');
+
+%visualize Weights
+h=figure;
+%set(h,'Visible','off');
+title('Visualizing weights');
+imagesize=[28 28];
+
+for i=1:500,
+ %subplot(23,23,i);
+ x=vishid(:,i);
+ imagesc(reshape(x,imagesize));
+ colormap gray;
+end
+
+%set(h,'Visible','on');
+
+%
+%for k=1:500
+ %   h = subplot(23,23,k);
+  %  set(gca,'XLim',[0 1]);
+   % drawnow;
+%end
+
