@@ -1,7 +1,7 @@
-%binary visible
+%Gaussian visible
 %binary hidden
 
-% parallel tempering
+%CD1 training
 
 epsilonw   = 0.001;   % Learning rate for weights 
 epsilonvb  = 0.001;   % Learning rate for biases of visible units 
@@ -13,9 +13,9 @@ initialmomentum  = 0.5;
 finalmomentum    = 0.9;
 [numcases, numdims, numbatches]=size(batchdatas); %batchdata is 3 dimensional and splitted as integers and assigned to  each variables
 epoch=1;
-k=1;
 
 % Initializing symmetric weights and biases 
+
 vishid     = 0.1*randn(numdims,numhid);
 hidbiases  = zeros(1,numhid);
 visbiases  = zeros(1,numdims);
